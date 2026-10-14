@@ -52,23 +52,34 @@ Step-by-step instructions, every setting, and troubleshooting are in [USAGE.md](
 | Setting | File | Search for | Default |
 |---|---|---|---|
 | Pages that show the widget | `frontend-snippet.php` | `$display_on_pages` | example IDs `123`, `456` |
-| Gemini model | `frontend-snippet.php` | `model: "gemini-2.5-flash-lite"` | `gemini-2.5-flash-lite` |
+| Gemini model | `wp-config.php` (optional) | `GEMINI_MODEL` | `gemini-2.5-flash-lite` |
 | Address that receives transcripts | `backend-snippet.php` | `$admin_email` | `your-email@example.com` |
 | Transcript email subject | `backend-snippet.php` | `$email_subject` | `Chat Transcript from Your Website` |
 | Chat rate limit | `backend-snippet.php` | `$request_count > 20` | 20 (per minute) |
 | Transcript rate limit | `backend-snippet.php` | `$request_count > 10` | 10 (per hour) |
 | Minimum messages before a transcript | `backend-snippet.php` | `count($transcript_data) < 4` | 4 |
 
+The Gemini model is a server-side setting. To use a model other than the default, add `define('GEMINI_MODEL', 'your-model-id');` to `wp-config.php` next to your API key.
+
 The assistant is called "Maggie". USAGE.md lists every place to change the name, greeting, colors and the assistant's instructions.
 
 ## Security notes
 
 - Keep the API key in `wp-config.php`. Do not paste it into either snippet.
-- The `/chat` route sends the page text and chat history it receives to Gemini with your key, and the model name also comes from the browser. Anyone who loads a widget page can call it within the rate limit. Watch your Gemini API usage.
+
+Fixed:
+
+- Visitors cannot choose the Gemini model. The backend uses only the `GEMINI_MODEL` setting (or the default) and ignores any model name a request sends.
+- The visitor's email address is not written to the PHP error log. When a transcript email fails, the log says whether the email to you or to the visitor failed, without the address.
+
+Still open:
+
+- The `/chat` route sends the page text and chat history it receives to Gemini with your key. Anyone who loads a widget page can call it within the rate limit. Watch your Gemini API usage.
 - The rate limits count requests per IP address. The IP is read from the `CF-Connecting-IP`, `X-Forwarded-For` and `X-Real-IP` headers before `REMOTE_ADDR`. If no proxy in front of your site overwrites those headers, a client can send its own values and avoid the limits.
 - The transcript is emailed to whatever address the visitor enters, within the transcript rate limit.
-- The backend writes the visitor's email address to the PHP error log each time it sends a transcript, and the visitor's IP address when it rejects a transcript request. Check who can read your logs.
-- Visitors' browsers load React from esm.sh and the chat background image from GitHub's user-content server. Your server sends the page text, the conversation and the visitor's first name to Google's Gemini API. You may need to mention this in your privacy policy.
+- The backend writes the visitor's IP address to the PHP error log when it rejects a transcript request. Check who can read your logs.
+
+Privacy: visitors' browsers load React from esm.sh. Your server sends the page text, the conversation and the visitor's first name to Google's Gemini API. You may need to mention this in your privacy policy.
 
 USAGE.md explains each protection and what it does not cover.
 

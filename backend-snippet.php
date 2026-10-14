@@ -3,7 +3,7 @@
  * AI Webpage Chat Widget - Secure Backend for WordPress code snippet
  * v2.8-Lite - Enhanced Security, Email Transcripts Only (No Database Storage)
  * 
- * by Igor Lipkanou (igor@magicquickwins.com) and Claude Sonet 4.5
+ * by Igor Lipkanou (igor@magicquickwins.com) and Claude Sonnet 4.5
  * 
  * Creates two REST API endpoints:
  * 1. /my-chat-assistant/v1/chat - Handles chat requests with Google Gemini API
@@ -174,8 +174,9 @@ function handle_ai_chat_proxy(WP_REST_Request $request)
         return new WP_Error('bad_request', 'Invalid parameters.', ['status' => 400]);
     }
 
-    // Get model (default to gemini-2.5-flash-lite)
-    $model = isset($payload['model']) ? $payload['model'] : 'gemini-2.5-flash-lite';
+    // Get model from the server-side setting only. Any model sent in the request is ignored.
+    // To change it, add define('GEMINI_MODEL', 'your-model-id'); to wp-config.php (default: gemini-2.5-flash-lite)
+    $model = (defined('GEMINI_MODEL') && !empty(GEMINI_MODEL)) ? GEMINI_MODEL : 'gemini-2.5-flash-lite';
     $api_url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$api_key}";
 
     // Build Gemini API payload based on action
@@ -423,14 +424,14 @@ function handle_ai_chat_submission(WP_REST_Request $request)
     $admin_sent = wp_mail($admin_email, $email_subject, $transcript_html, $headers);
     $user_sent = wp_mail($email, $email_subject, $transcript_html, $headers);
 
-    // Always log failures with details
+    // Always log failures (without the visitor's email address)
     if (!$admin_sent || !$user_sent) {
-        error_log('AI Chat Widget: Email failed - Admin: ' . ($admin_sent ? 'OK' : 'FAILED') . ', User: ' . ($user_sent ? 'OK' : 'FAILED') . ' - Email: ' . $email);
+        error_log('AI Chat Widget: Email failed - Admin: ' . ($admin_sent ? 'OK' : 'FAILED') . ', User: ' . ($user_sent ? 'OK' : 'FAILED'));
     }
 
     // Log successes for monitoring (comment out these 3 lines if logs get too large)
     if ($admin_sent && $user_sent) {
-        error_log('AI Chat Widget: Transcript sent successfully to ' . $email);
+        error_log('AI Chat Widget: Transcript sent successfully');
     }
 
     return new WP_REST_Response(['success' => true], 200);

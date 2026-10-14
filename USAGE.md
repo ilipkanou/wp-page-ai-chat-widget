@@ -68,9 +68,13 @@ The widget loads only where WordPress's `is_singular()` is true: single pages, p
 
 ### Gemini model
 
-`frontend-snippet.php`, search for `model: "gemini-2.5-flash-lite"`.
+The model is a server-side setting. By default the backend uses `gemini-2.5-flash-lite`. To use a different model, add this line to `wp-config.php`, next to your API key:
 
-The browser sends this name with every chat request, and the backend inserts it into the Gemini `generateContent` URL. Use a model ID from Google's current Gemini model list that supports `generateContent`. If the backend receives no model name, it uses `gemini-2.5-flash-lite`.
+```php
+define('GEMINI_MODEL', 'your-model-id');
+```
+
+The backend inserts this name into the Gemini `generateContent` URL. Use a model ID from Google's current Gemini model list that supports `generateContent`. The browser does not send a model name, and the backend ignores one if a request includes it.
 
 ### Transcript email
 
@@ -139,9 +143,9 @@ The assistant is called "Maggie". To rename it, change every place below.
 | `#008069` | floating chat button and send button |
 | `#005E54` | header bar, hover and focus states |
 | `#DCF8C6` | visitor message bubbles |
-| `#E5DDD5` | chat background (under the background image) |
+| `#E5DDD5` | chat background |
 
-The chat background image is loaded from a URL on `user-images.githubusercontent.com`; search for `background-image` to change or remove it. The transcript email has its own copy of `#E5DDD5` and `#DCF8C6` in `backend-snippet.php`.
+The chat background is a plain color. The widget loads no background image. The transcript email has its own copy of `#E5DDD5` and `#DCF8C6` in `backend-snippet.php`.
 
 ## 4. How the page content is loaded
 
@@ -181,7 +185,7 @@ The full filtered page text is sent with every chat message as part of the assis
 7. The backend runs its checks (section 6) and sends the HTML email to `$admin_email` and to the visitor. The email shows the visitor's name and address, the summary, and the conversation as chat bubbles.
 8. The widget confirms, and the input stays disabled. Reloading the page starts a new chat.
 
-What is stored: conversations are not saved in WordPress. The only data the widget stores are rate-limit counters (WordPress transients, keyed by a hash of the visitor's IP address). The transcript exists only in the two emails and, partly, in the PHP error log (see section 6). The visitor's email address is not sent to Gemini.
+What is stored: conversations are not saved in WordPress. The only data the widget stores are rate-limit counters (WordPress transients, keyed by a hash of the visitor's IP address). The transcript exists only in the two emails. The PHP error log does not record the visitor's email address or the conversation (see section 6). The visitor's email address is not sent to Gemini.
 
 ## 6. Abuse protection
 
@@ -213,9 +217,13 @@ The widget always sends `website` empty, and there is no `website` field on the 
 
 The backend cleans the name, email and summary with WordPress's `sanitize_*` functions, checks the email with `is_email()`, and escapes everything placed in the email HTML.
 
+### Model choice
+
+The Gemini model comes only from the `GEMINI_MODEL` setting in `wp-config.php`, or the default `gemini-2.5-flash-lite` (section 3). The backend ignores any model name in a request, so a visitor cannot switch your key to a different model.
+
 ### What is not covered
 
-- Anyone who has loaded a widget page can call `/chat` with their own page text and history, up to the rate limit, and choose the model name. Your API key pays for those requests.
+- Anyone who has loaded a widget page can call `/chat` with their own page text and history, up to the rate limit. Your API key pays for those requests.
 - The transcript goes to the address in the request, so someone could send transcripts to other people's addresses, up to the transcript limit.
 - See "Rate limits" above for the IP header limitation.
 
@@ -223,7 +231,7 @@ The backend cleans the name, email and summary with WordPress's `sanitize_*` fun
 
 The backend writes to the PHP error log:
 
-- the visitor's email address after every transcript send, on success and on failure
+- the result of every transcript send: "Transcript sent successfully", or "Email failed" with whether the email to you or to the visitor failed. The visitor's email address and the conversation are not logged.
 - the visitor's IP address when a transcript request fails the `website`, length or structure check
 - Gemini connection errors and Gemini error messages
 - "API key not configured" when the key is missing

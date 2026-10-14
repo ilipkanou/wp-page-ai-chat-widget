@@ -3,7 +3,7 @@
  * AI Webpage Chat Widget - Frontend Loader code snippet
  * v2.8-Lite - Enhanced Security: Added Bot Trap
  * 
- * by Igor Lipkanou (igor@magicquickwins.com) and Claude Sonet 4.5
+ * by Igor Lipkanou (igor@magicquickwins.com) and Claude Sonnet 4.5
  * 
  * Displays the chat widget on specific WordPress pages/posts you choose.
  * Features:
@@ -62,8 +62,7 @@ add_action('wp_footer', function() {
         echo '<script type="text/javascript">';
         echo 'window.AI_CHAT_CONFIG = {';
         echo '  backendUrl: ' . json_encode($backend_url) . ',';
-        echo '  nonce: ' . json_encode($nonce) . ',';
-        echo '  model: "gemini-2.5-flash-lite"'; // You can change the model here
+        echo '  nonce: ' . json_encode($nonce);
         echo '};';
         echo '</script>';
         
@@ -83,7 +82,7 @@ import ReactDOM from 'react-dom/client';
         const style = document.createElement('style');
         style.textContent = `
             /* Chat Widget Styles */
-            .chat-widget-container { position: fixed; bottom: 12px; right: 12px; width: calc(100vw - 24px); max-width: 24rem; height: 60vh; max-height: 500px; background-color: #E5DDD5; background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); display: flex; flex-direction: column; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; z-index: 9999; }
+            .chat-widget-container { position: fixed; bottom: 12px; right: 12px; width: calc(100vw - 24px); max-width: 24rem; height: 60vh; max-height: 500px; background-color: #E5DDD5; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); display: flex; flex-direction: column; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; z-index: 9999; }
             @media (min-width: 640px) { .chat-widget-container { bottom: 20px; right: 20px; width: 100%; height: 70vh; max-height: 600px; } }
             .chat-header { background-color: #005E54; color: white; padding: 12px; display: flex; align-items: center; border-radius: 8px 8px 0 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
             .chat-avatar { width: 40px; height: 40px; margin-right: 12px; }
@@ -306,7 +305,7 @@ import ReactDOM from 'react-dom/client';
                         },
                         body: JSON.stringify({ 
                             action, 
-                            payload: { ...payload, model: config.model } 
+                            payload
                         })
                     });
                     
@@ -580,7 +579,6 @@ import ReactDOM from 'react-dom/client';
         
         return e(ChatWidget, { 
             config: {
-                model: window.AI_CHAT_CONFIG.model,
                 icon: e(BotIcon, { width: "32", height: "32" }),
                 backendUrl: window.AI_CHAT_CONFIG.backendUrl,
                 nonce: window.AI_CHAT_CONFIG.nonce
