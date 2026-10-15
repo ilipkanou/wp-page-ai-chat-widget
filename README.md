@@ -61,8 +61,8 @@ Step-by-step instructions, every setting, and troubleshooting are in [USAGE.md](
 | Gemini model | `wp-config.php` (optional) | `GEMINI_MODEL` | `gemini-2.5-flash-lite` |
 | Address that receives transcripts | `backend-snippet.php` | `$admin_email` | `your-email@example.com` |
 | Transcript email subject | `backend-snippet.php` | `$email_subject` | `Chat Transcript from Your Website` |
-| Chat rate limit | `backend-snippet.php` | `$request_count > 20` | 20 (per clock minute) |
-| Transcript rate limit | `backend-snippet.php` | `$request_count > 10` | 10 (per clock hour) |
+| Chat rate limit | `backend-snippet.php` | `$request_count > 20` | 21 per clock minute (the 22nd is refused) |
+| Transcript rate limit | `backend-snippet.php` | `$request_count > 10` | 11 per clock hour (the 12th is refused) |
 | Minimum messages before a transcript | `backend-snippet.php` | `count($transcript_data) < 4` | 4 |
 | Assistant picture | `frontend-snippet.php` | `MAGGIE_AVATAR` | built-in illustration (see `assets/`) |
 
