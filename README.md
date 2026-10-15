@@ -2,15 +2,19 @@
 
 An AI chat assistant for WordPress pages. It reads the text of the page it sits on, answers visitor questions about that page with Google Gemini, and emails a transcript of the conversation to the visitor and to you.
 
-Version 2.8 Lite. It installs as two PHP code snippets and does not save conversations in WordPress.
+Version 2.8.2 Lite. It installs as two PHP code snippets and does not save conversations in WordPress. What changed: [CHANGELOG.md](CHANGELOG.md).
+
+![The assistant's avatar](assets/maggie-avatar-112.webp)
 
 ## Features
 
 - A chat window in the bottom-right corner of the pages you choose, styled like a messaging app, with a mobile layout below 640px.
 - Answers based on the page itself: the widget reads the page's visible text and sends it to Gemini as context.
 - Email addresses and phone-number-like strings are removed from the page text before it is sent to the AI.
-- The assistant asks for the visitor's first name and uses it in the conversation.
-- When the conversation ends, the visitor can enter an email address. Both the visitor and you receive an HTML transcript with a short AI-written summary.
+- The assistant asks for the visitor's first name and uses it in the conversation. If the AI cannot read the name, the widget finds the first name in the message itself.
+- A bar pinned under the chat header, "Get this chat by email", takes the visitor's email address at any time. The chat so far is emailed after the assistant's first answer, and the full transcript when the conversation ends. If the visitor never uses the bar, the assistant asks for an address at the end. Both the visitor and you receive an HTML transcript with a short AI-written summary.
+- Works on cached and optimised pages. When a cached page carries an expired security token, the widget fetches a fresh one and retries. Its settings sit on its own page element, so script-delay features such as LiteSpeed Cache "Delay JS" do not stop it from appearing.
+- An illustrated assistant avatar on the chat button and in the header, built into the code.
 - Your Gemini API key stays on the server. The browser only talks to your own WordPress REST API.
 - Abuse protection: a WordPress security token on every request, per-visitor rate limits on chat and on transcript requests, a minimum conversation length and structure check before a transcript is sent, and a `website` field that must stay empty.
 
@@ -18,8 +22,8 @@ Version 2.8 Lite. It installs as two PHP code snippets and does not save convers
 
 The widget has two parts:
 
-- `backend-snippet.php` registers two REST routes under `/wp-json/my-chat-assistant/v1/`. The `/chat` route forwards chat requests to the Gemini API using your key. The `/lead` route checks a transcript request and sends the emails with `wp_mail()`.
-- `frontend-snippet.php` prints the widget in the footer of the pages whose IDs you list. It loads React 19 from esm.sh through an import map and renders the chat window.
+- `backend-snippet.php` registers three REST routes under `/wp-json/my-chat-assistant/v1/`. The `/chat` route forwards chat requests to the Gemini API using your key. The `/lead` route checks a transcript request and sends the emails with `wp_mail()`. The `/nonce` route returns a fresh security token, for pages served from a cache.
+- `frontend-snippet.php` prints the widget in the footer of the pages whose IDs you list, with its settings (the REST address and a security token) as data attributes on its container. It loads React 19 from esm.sh through an import map and renders the chat window.
 
 ## Requirements
 
@@ -45,6 +49,8 @@ Try it on a staging site before your live site.
 3. Create a second PHP snippet, paste `frontend-snippet.php`, replace the example IDs in `$display_on_pages` with your page IDs, set it to run everywhere, and activate it.
 4. Open one of those pages, have a short conversation, and check that the transcript email arrives.
 
+Upgrading from 2.8 Lite: replace both snippets and put your settings back (see [CHANGELOG.md](CHANGELOG.md)).
+
 Step-by-step instructions, every setting, and troubleshooting are in [USAGE.md](USAGE.md).
 
 ## Configuration
@@ -55,9 +61,10 @@ Step-by-step instructions, every setting, and troubleshooting are in [USAGE.md](
 | Gemini model | `wp-config.php` (optional) | `GEMINI_MODEL` | `gemini-2.5-flash-lite` |
 | Address that receives transcripts | `backend-snippet.php` | `$admin_email` | `your-email@example.com` |
 | Transcript email subject | `backend-snippet.php` | `$email_subject` | `Chat Transcript from Your Website` |
-| Chat rate limit | `backend-snippet.php` | `$request_count > 20` | 20 (per minute) |
-| Transcript rate limit | `backend-snippet.php` | `$request_count > 10` | 10 (per hour) |
+| Chat rate limit | `backend-snippet.php` | `$request_count > 20` | 20 (per clock minute) |
+| Transcript rate limit | `backend-snippet.php` | `$request_count > 10` | 10 (per clock hour) |
 | Minimum messages before a transcript | `backend-snippet.php` | `count($transcript_data) < 4` | 4 |
+| Assistant picture | `frontend-snippet.php` | `MAGGIE_AVATAR` | built-in illustration (see `assets/`) |
 
 The Gemini model is a server-side setting. To use a model other than the default, add `define('GEMINI_MODEL', 'your-model-id');` to `wp-config.php` next to your API key.
 
@@ -71,6 +78,8 @@ Fixed:
 
 - Visitors cannot choose the Gemini model. The backend uses only the `GEMINI_MODEL` setting (or the default) and ignores any model name a request sends.
 - The visitor's email address is not written to the PHP error log. When a transcript email fails, the log says whether the email to you or to the visitor failed, without the address.
+- Each request counts once against the rate limits, and the limits reset every clock minute (chat) and clock hour (transcript). Before 2.8.2, WordPress's second permission check made every request count twice.
+- A cached page with an expired security token no longer breaks the chat: the widget gets a fresh token from `/nonce`.
 
 Still open:
 
@@ -82,6 +91,10 @@ Still open:
 Privacy: visitors' browsers load React from esm.sh. Your server sends the page text, the conversation and the visitor's first name to Google's Gemini API. You may need to mention this in your privacy policy.
 
 USAGE.md explains each protection and what it does not cover.
+
+## Tests
+
+`tests/run-tests.sh` runs the snippets in a throwaway local WordPress (WordPress Playground) with a fake AI and drives the widget in a real browser engine. It needs Node.js and Playwright (`npm i -g playwright && playwright install chromium`). Nothing is sent to Gemini and no email goes out. Add `--with-rate-limit` to also test the rate limits (about 4 more minutes). See [USAGE.md](USAGE.md), section 7.
 
 ## License
 

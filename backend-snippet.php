@@ -1,7 +1,9 @@
 <?php
 /**
  * AI Webpage Chat Widget - Secure Backend for WordPress code snippet
- * v2.8-Lite - Enhanced Security, Email Transcripts Only (No Database Storage)
+ * v2.8-Lite   - Enhanced Security, Email Transcripts Only (No Database Storage)
+ * v2.8.2-Lite - Fresh security token route, so a cached page with an expired token no longer
+ *               breaks the chat. Rate limits count each request once and reset every minute/hour.
  * 
  * by Igor Lipkanou (igor@magicquickwins.com) and Claude Sonnet 4.5
  * 
@@ -57,6 +59,12 @@ add_action('rest_api_init', function () {
             return new WP_Error('rest_forbidden', 'Invalid security token.', ['status' => 403]);
         }
 
+        // FIXED in v2.8.2: WordPress runs this check a second time for each request,
+        // to build the "Allow" header. Count only the first run.
+        if (doing_filter('rest_post_dispatch')) {
+            return true;
+        }
+
         // Detect real IP behind proxy/CDN (Cloudflare, etc.)
         $ip_address = sanitize_text_field(
             $_SERVER['HTTP_CF_CONNECTING_IP'] ??      // Cloudflare
@@ -69,7 +77,9 @@ add_action('rest_api_init', function () {
             $ip_address = trim(explode(',', $ip_address)[0]);
         }
 
-        $transient_key = 'chat_limit_' . md5($ip_address);
+        // FIXED in v2.8.2: one counter per clock minute. Before, each request restarted
+        // the 60-second timer, so a steady chat never reset the count.
+        $transient_key = 'chat_limit_' . md5($ip_address) . '_' . floor(time() / 60);
         $request_count = get_transient($transient_key);
 
         // Rate limiting: 20 requests per minute per visitor
@@ -97,6 +107,11 @@ add_action('rest_api_init', function () {
             return new WP_Error('rest_forbidden', 'Invalid security token.', ['status' => 403]);
         }
 
+        // FIXED in v2.8.2: count only the first run (see the chat check above).
+        if (doing_filter('rest_post_dispatch')) {
+            return true;
+        }
+
         // Stricter rate limiting for transcript submission: 10 per hour
         // This prevents abuse while allowing visitors to submit on multiple pages
         // You can adjust this number based on your needs:
@@ -116,7 +131,8 @@ add_action('rest_api_init', function () {
             $ip_address = trim(explode(',', $ip_address)[0]);
         }
 
-        $transient_key = 'chat_lead_limit_' . md5($ip_address);
+        // FIXED in v2.8.2: one counter per clock hour (see the chat check above).
+        $transient_key = 'chat_lead_limit_' . md5($ip_address) . '_' . floor(time() / 3600);
         $request_count = get_transient($transient_key);
 
         if ($request_count === false) {
@@ -149,6 +165,22 @@ add_action('rest_api_init', function () {
         'methods' => 'POST',
         'callback' => 'handle_ai_chat_submission',
         'permission_callback' => $permission_callback_lead  // Uses stricter callback
+    ]);
+
+    // Endpoint 3: Fresh security token - NEW in v2.8.2
+    // The page cache (LiteSpeed) can serve page HTML for days, but a security token
+    // expires after 12-24 hours. When the server rejects the page's security token,
+    // the widget calls this endpoint for a fresh one and retries once.
+    // POST responses are not cached. The widget sends no cookies, so the
+    // security token is always made for a logged-out visitor.
+    register_rest_route('my-chat-assistant/v1', '/nonce', [
+        'methods' => 'POST',
+        'callback' => function () {
+            $response = new WP_REST_Response(['nonce' => wp_create_nonce('wp_rest')]);
+            $response->header('Cache-Control', 'no-store, max-age=0');
+            return $response;
+        },
+        'permission_callback' => '__return_true'  // Public: a page visitor can get this security token anyway
     ]);
 });
 

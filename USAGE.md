@@ -60,6 +60,13 @@ $display_on_pages = [
 
 The widget loads only where WordPress's `is_singular()` is true: single pages, posts and other single post types. It does not appear on archives, category pages or the blog posts index, even if you add that page's ID.
 
+### Upgrading from 2.8 Lite
+
+1. Note your current settings: `$admin_email`, `$email_subject`, `$display_on_pages`, and any limit or length you changed.
+2. Replace the code of both snippets with the new `backend-snippet.php` and `frontend-snippet.php`. Update both: the new frontend needs the backend's new `/nonce` route.
+3. Put your settings back, then save both snippets.
+4. Clear your page cache, so visitors get the new frontend.
+
 ## 3. Settings
 
 ### Pages
@@ -91,14 +98,16 @@ The same email, with the same subject, goes to `$admin_email` and to the visitor
 
 `backend-snippet.php`:
 
-- Chat: search for `$request_count > 20`. The counter resets 60 seconds after the last accepted request.
-- Transcript: search for `$request_count > 10`. The counter resets one hour after the last accepted request.
+- Chat: search for `$request_count > 20`. The counter resets at the start of each clock minute.
+- Transcript: search for `$request_count > 10`. The counter resets at the start of each clock hour.
 
-The first request sets the counter to 1, and a request is refused once the counter is above the number. With the defaults, a visitor can make 21 chat requests before the 22nd is refused, and 11 transcript requests before the 12th is refused. Every message the visitor sends counts as one chat request. So do the name step and the summary made before a transcript is sent.
+The first request sets the counter to 1, and a request is refused once the counter is above the number. With the defaults, a visitor can make 21 chat requests in a clock minute before the 22nd is refused, and 11 transcript requests in a clock hour before the 12th is refused. Every message the visitor sends counts as one chat request. So do the name step and each summary made before a transcript is sent.
+
+Before 2.8.2 the limits were tighter than these numbers. WordPress runs a route's permission check a second time for each request (to build the HTTP `Allow` header), and the counting happens there, so every request counted twice. Each request also restarted the timer, so a visitor who kept chatting never got a fresh count. The check now skips the second run, and the windows follow the clock.
 
 ### Minimum conversation length
 
-`backend-snippet.php`, search for `count($transcript_data) < 4`. A transcript request with fewer messages than this number is refused. In the normal widget flow the transcript already holds 4 messages once the visitor has given their name, so raise the number if you want to require at least one question and answer.
+`backend-snippet.php`, search for `count($transcript_data) < 4`. A transcript request with fewer messages than this number is refused. In the normal widget flow the transcript already holds 4 messages once the visitor has given their name, so raise the number if you want to require at least one question and answer. The "Get this chat by email" bar always waits for the assistant's first answer before it sends, so a transcript from the bar has at least 6 messages.
 
 ### Assistant name
 
@@ -115,7 +124,17 @@ The assistant is called "Maggie". To rename it, change every place below.
 - Search for `'Maggie'`: the label used in the text sent for the summary.
 - Search for `'Maggie (AI)'`: the label in the transcript email. It appears twice.
 
-`MaggieAvatar` in the frontend is only an internal name for the avatar icon and does not need to change.
+`MaggieAvatar` and `MAGGIE_AVATAR` in the frontend are only internal names for the avatar and do not need to change.
+
+### Assistant picture
+
+The avatar on the chat button and in the header is an illustration built into `frontend-snippet.php` as text (a "data URI"), so the page makes no extra request for it. The image files are in `assets/`: `maggie-avatar-112.webp` (the one in the code) and `maggie-avatar.png` (512 px).
+
+To use your own picture:
+
+1. Make a square image with the face centred, 112 × 112 pixels, saved as WebP (a few KB).
+2. Turn it into text: `printf 'data:image/webp;base64,%s\n' "$(base64 -i your-avatar.webp)"` on macOS, or `base64 -w0` instead of `base64 -i` on Linux.
+3. In `frontend-snippet.php`, search for `const MAGGIE_AVATAR = '` and replace everything between the quotes with the output.
 
 ### Header subtitle
 
@@ -129,6 +148,9 @@ The assistant is called "Maggie". To rename it, change every place below.
 - `By the way, when we're finished chatting`: the reminder that a transcript can be emailed. It appears twice (normal and fallback greeting).
 - `I am glad I could help!`: the request for an email address.
 - `Done! The transcript has been sent.`: the confirmation.
+- `Done! I sent our chat so far to`: the confirmation after a send from the bar.
+- `I'm sending the full transcript to`: the message at the end of the chat when the visitor already gave an email in the bar.
+- `const getBarText`: every text the "Get this chat by email" bar shows.
 
 ### The assistant's instructions
 
@@ -144,6 +166,7 @@ The assistant is called "Maggie". To rename it, change every place below.
 | `#005E54` | header bar, hover and focus states |
 | `#DCF8C6` | visitor message bubbles |
 | `#E5DDD5` | chat background |
+| `#FFF8E1` | the "Get this chat by email" bar |
 
 The chat background is a plain color. The widget loads no background image. The transcript email has its own copy of `#E5DDD5` and `#DCF8C6` in `backend-snippet.php`.
 
@@ -177,13 +200,16 @@ The full filtered page text is sent with every chat message as part of the assis
 ## 5. How a conversation and the transcript email work
 
 1. The visitor clicks the chat button. The assistant greets them and asks for their name.
-2. The visitor types their name. The backend asks Gemini to pick out the first name and write a greeting. If that fails, the widget uses what the visitor typed.
-3. The assistant adds a reminder that it can email a transcript at the end.
+2. The visitor types their name. The backend asks Gemini to pick out the first name and write a greeting. If that fails, the widget finds the first name in the message itself ("Hello. My name is Bob." gives "Bob"; with no name it says "Nice to meet you!").
+3. The assistant adds a reminder that it can email a transcript. At the same moment the "Get this chat by email" bar appears under the header.
 4. Each visitor message is sent to Gemini with the conversation so far, the page text and the visitor's first name.
-5. When Gemini's reply contains `[END_OF_CONVERSATION]`, the widget removes the marker, asks for an email address, and switches the input to an email field. The visitor cannot start this step with a button. It starts only when the assistant ends the conversation.
-6. The visitor enters an email address. The widget checks its format, asks Gemini for a one-paragraph summary, and sends the name, email, transcript, summary and an empty `website` field to `/lead`.
-7. The backend runs its checks (section 6) and sends the HTML email to `$admin_email` and to the visitor. The email shows the visitor's name and address, the summary, and the conversation as chat bubbles.
-8. The widget confirms, and the input stays disabled. Reloading the page starts a new chat.
+5. **The bar, at any time.** The visitor clicks it and types an email address. If they have not asked a question yet, the bar says the chat will be sent after the assistant's next answer. Once there is a question and an answer, the widget sends the chat so far (steps 7 and 8) and the visitor keeps chatting. The bar then shows "Sent to …"; a click sends an updated copy.
+6. **The end.** When Gemini's reply contains `[END_OF_CONVERSATION]`, the widget removes the marker. If the visitor already gave an email in the bar, the full transcript goes to that address straight away. If not, the widget asks for an email address and switches the input to an email field.
+7. For each transcript, the widget asks Gemini for a one-paragraph summary and sends the name, email, transcript, summary and an empty `website` field to `/lead`.
+8. The backend runs its checks (section 6) and sends the HTML email to `$admin_email` and to the visitor. The email shows the visitor's name and address, the summary, and the conversation as chat bubbles.
+9. After the final transcript the widget confirms and the input stays disabled. Reloading the page starts a new chat.
+
+A visitor who uses the bar and then finishes the chat gets two emails: the early copy and the full transcript. So do you.
 
 What is stored: conversations are not saved in WordPress. The only data the widget stores are rate-limit counters (WordPress transients, keyed by a hash of the visitor's IP address). The transcript exists only in the two emails. The PHP error log does not record the visitor's email address or the conversation (see section 6). The visitor's email address is not sent to Gemini.
 
@@ -191,11 +217,16 @@ What is stored: conversations are not saved in WordPress. The only data the widg
 
 ### Security token
 
-Both routes require the WordPress REST token (`X-WP-Nonce`, action `wp_rest`). The frontend snippet prints it into the page. A request without a valid token gets "Invalid security token." For logged-out visitors this token is the same for everyone while it is valid, so it shows that the request came from someone who loaded one of your pages. It does not identify a visitor.
+The `/chat` and `/lead` routes require the WordPress REST token (`X-WP-Nonce`, action `wp_rest`). The frontend snippet prints it into the page as the `data-nonce` attribute of the widget's container. For logged-out visitors this token is the same for everyone while it is valid, so it shows that the request came from someone who loaded one of your pages. It does not identify a visitor.
+
+- A request with no token gets "Invalid security token." from the snippet.
+- A request with an expired or wrong token gets "Cookie check failed" from WordPress itself (code `rest_cookie_invalid_nonce`). This happens when a page cache serves a copy older than the token (12 to 24 hours). The widget then asks the `/nonce` route for a fresh token and retries once, so the visitor does not notice.
+
+The widget sends its requests without cookies, so WordPress treats every visitor, including a logged-in admin, as logged out and the token always matches. The `/nonce` route itself needs no token: anyone who loads your page can read the token anyway.
 
 ### Browser origin restriction
 
-On its two routes, the backend sets `Access-Control-Allow-Origin` to your site's home URL, so browsers block pages on other websites from calling them. Requests sent from outside a browser are not affected.
+On its routes, the backend sets `Access-Control-Allow-Origin` to your site's home URL, so browsers block pages on other websites from calling them. Requests sent from outside a browser are not affected.
 
 ### Rate limits
 
@@ -240,13 +271,29 @@ The success line is marked in the code (search for `Log successes for monitoring
 
 ## 7. Testing checklist
 
-- [ ] The chat button appears on each page in `$display_on_pages` and nowhere else.
+- [ ] The chat button appears on each page in `$display_on_pages` and nowhere else, without scrolling or clicking first.
 - [ ] The browser console shows `AI Chat Widget: Found content using selector: ...`.
 - [ ] The assistant greets you by your first name.
+- [ ] The "Get this chat by email" bar appears after the greeting.
 - [ ] It answers a question using facts from the page.
-- [ ] When you say you are done, it asks for your email address.
+- [ ] An email entered in the bar receives the chat so far, and you can keep chatting.
+- [ ] When you say you are done, the full transcript goes to the same address (or, without the bar, it asks for your email address).
 - [ ] The transcript email reaches both `$admin_email` and the address you entered (check spam folders).
-- [ ] After the 11th transcript request within the hour, the next one is refused.
+- [ ] After the 11th transcript request within the clock hour, the next one is refused.
+
+### Automated tests
+
+`tests/run-tests.sh` runs the snippets in a throwaway local WordPress (WordPress Playground, which runs inside Node) with a fake AI, and drives the widget in a real browser engine. Nothing is sent to Gemini, no email goes out, and your site is not touched.
+
+```bash
+npm i -g playwright && playwright install chromium   # once
+tests/run-tests.sh                                     # about 3 minutes
+tests/run-tests.sh --with-rate-limit                   # about 4 minutes more
+```
+
+It checks: the name fallback (20 sample messages); that the widget appears and works with inline scripts delayed and no interaction; the bar, the avatar, bad email addresses and both transcript sends (13 checks); the full chat on a fresh page, on a cached page with an expired token, and as a logged-in admin; and, with the flag, the rate limits (21 chat requests and 11 transcripts pass, a steady chat is never blocked). The last line is `ALL TESTS PASSED` or `SOME TESTS FAILED`.
+
+The fake AI lives in `tests/harness/zz-test-harness.php`. It is for the test site only; never add it to a real site.
 
 ## 8. Troubleshooting
 
@@ -256,7 +303,7 @@ The success line is marked in the code (search for `Log successes for monitoring
 - The page's ID is in `$display_on_pages`, and the page is a single page or post (see section 2).
 - Your theme calls `wp_footer()`.
 - Clear any page cache and your browser cache, then reload.
-- Open the browser console (F12) and look for errors.
+- Open the browser console (F12) and look for errors. `Cannot read properties of undefined (reading 'backendUrl')` means the page still runs a frontend older than 2.8.2 on a site that delays inline scripts (for example LiteSpeed Cache "Delay JS"): update the frontend snippet and clear the page cache.
 
 ### The chat opens but the assistant does not answer
 
@@ -264,17 +311,20 @@ The widget shows "I'm having trouble connecting right now." Open the browser's d
 
 | Response message | Meaning | What to do |
 |---|---|---|
-| `Invalid security token.` | The token in the page has expired or does not match. | Reload the page. If you use a page cache, see below. |
-| `Too many requests. Please wait.` | Chat rate limit reached. | Wait 60 seconds. |
+| `Cookie check failed` | The token in a cached page has expired. The widget normally gets a fresh one from `/nonce` and retries, so you only see this when that retry failed. | Check that the backend snippet is version 2.8.2 Lite or later (the `/nonce` route must exist, see below). |
+| `Invalid security token.` | The request carried no token. | Check that the widget's `<div id="ai-chat-widget-root">` has a `data-nonce` attribute (right-click the page, View Page Source). |
+| `Too many requests. Please wait.` | Chat rate limit reached. | Wait for the next clock minute. |
 | `API key not configured.` | `GEMINI_API_KEY` is missing or empty. | Check `wp-config.php` (step 1). |
 | `Failed to connect to AI service.` | Your server could not reach the Gemini API. | Check your host's outgoing connections and the PHP error log. |
 | Another message from Gemini | Gemini refused the request, for example because of an invalid key or an unknown model name. | Fix the key or the model name. |
 
-To check that the backend snippet is running, open `https://your-site.example/wp-json/my-chat-assistant/v1` in a browser. When the snippet is active, WordPress returns a JSON description of this namespace that lists the `/chat` and `/lead` routes. A `rest_no_route` error means the backend snippet is not running.
+To check that the backend snippet is running, open `https://your-site.example/wp-json/my-chat-assistant/v1` in a browser. When the snippet is active, WordPress returns a JSON description of this namespace that lists the `/chat`, `/lead` and `/nonce` routes. A `rest_no_route` error means the backend snippet is not running.
 
 ### Page caching
 
-A WordPress token is valid for 12 to 24 hours by default. If a caching plugin serves a copy of the page older than that, the token in it is no longer valid and every request fails with "Invalid security token." Exclude the widget pages from the page cache, or keep the cache lifetime shorter than 12 hours.
+Page caching is safe since 2.8.2; you do not need to exclude the widget pages. A WordPress token is valid for 12 to 24 hours, so a cached page can carry an expired one. WordPress then answers "Cookie check failed", and the widget gets a fresh token from `/nonce` and retries once. Script-delay features such as LiteSpeed Cache "Delay JS" are also safe: the widget reads its settings from attributes on its container, not from an inline script.
+
+After you update the snippets, clear the page cache once, so visitors get the new frontend.
 
 ### The assistant does not know what is on the page
 
@@ -284,7 +334,7 @@ A WordPress token is valid for 12 to 24 hours by default. If a caching plugin se
 
 ### The assistant never asks for an email address
 
-The email step starts only when Gemini's reply contains `[END_OF_CONVERSATION]`. If you edited the assistant's instructions, check that the line asking for this marker is still there.
+The end-of-chat email step starts only when Gemini's reply contains `[END_OF_CONVERSATION]`. If you edited the assistant's instructions, check that the line asking for this marker is still there. Visitors can still use the "Get this chat by email" bar at any time.
 
 ### The transcript fails to send
 
@@ -301,4 +351,8 @@ The backend reports success even when `wp_mail()` fails. Check:
 
 ### The input is disabled after the transcript is sent
 
-This is expected. Reload the page to start a new chat.
+This is expected after the final transcript at the end of the chat. Reload the page to start a new chat. A send from the bar does not disable the input.
+
+### The bar says "I'll send this chat to … after my next answer"
+
+The visitor gave an email before asking a question. The chat is sent right after the assistant's next answer.
