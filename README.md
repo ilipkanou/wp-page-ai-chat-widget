@@ -6,6 +6,10 @@ Version 2.8.2 Lite. It installs as two PHP code snippets and does not save conve
 
 ![The assistant's avatar](assets/maggie-avatar-112.webp)
 
+## Real-world use
+
+The full version of this widget runs on the sales page for the book *MAGIC Quick Wins* ([magicquickwins.com](https://www.magicquickwins.com/specials/mqw-book/get-ebook/)) and on the offer pages that follow it. A visitor can ask about the book before buying, and the assistant answers from the page. When the visitor asks for the chat by email, the site owner gets the transcript with a summary and follows up from the inbox. That site also adds each lead to FluentCRM; this Lite edition sends the emails only.
+
 ## Features
 
 - A chat window in the bottom-right corner of the pages you choose, styled like a messaging app, with a mobile layout below 640px.
@@ -37,19 +41,42 @@ The widget has two parts:
 
 ## Quick install
 
-Try it on a staging site before your live site.
+Try it on a staging site before your live site. Each step says what the part does and gives the line to copy.
 
-1. Add your API key to `wp-config.php`, above the line `/* That's all, stop editing! Happy publishing. */`:
+1. **Store your Gemini API key.** The key stays on the server, so visitors never see it. Open `wp-config.php` in your WordPress root folder and paste this line just above `/* That's all, stop editing! Happy publishing. */`, with your own key in place of `your-gemini-api-key`:
 
    ```php
    define('GEMINI_API_KEY', 'your-gemini-api-key');
    ```
 
-2. Create a new PHP snippet, paste `backend-snippet.php`, set `$admin_email` to your address, set the snippet to run everywhere, and activate it.
-3. Create a second PHP snippet, paste `frontend-snippet.php`, replace the example IDs in `$display_on_pages` with your page IDs, set it to run everywhere, and activate it.
-4. Open one of those pages, have a short conversation, and check that the transcript email arrives.
+2. **Add the backend snippet.** It sends the chat to Gemini and emails the transcripts. In your snippet plugin, create a new PHP snippet and paste the whole of `backend-snippet.php`. Find the `$admin_email` line and replace the example address with the one that should receive transcripts:
+
+   ```php
+   $admin_email = 'you@yourdomain.com';
+   ```
+
+   Set the snippet to run everywhere, then save and activate it.
+
+3. **Add the frontend snippet.** It shows the chat window. Create a second PHP snippet and paste the whole of `frontend-snippet.php`. Find `$display_on_pages` and list the pages that should show the chat. A page's ID is the number after `post=` in its editor URL:
+
+   ```php
+   $display_on_pages = [
+       123,  // sales page
+       456,  // product page
+   ];
+   ```
+
+   Set the snippet to run everywhere, then save and activate it.
+
+4. **Test it.** Open one of those pages, ask a question, enter your email address in the "Get this chat by email" bar, and check that the transcript arrives.
 
 Upgrading from 2.8 Lite: replace both snippets and put your settings back (see [CHANGELOG.md](CHANGELOG.md)).
+
+### Using it day to day
+
+- Each chat where the visitor leaves an email address sends you an email with the visitor's name, address, a one-paragraph summary and the full chat. The visitor gets the same email. WordPress stores no conversations, so the email is your record.
+- Reply from your inbox, or add the contact to your email list or CRM.
+- When a visitor asks something the page does not cover, the assistant says it does not see that detail on the page. Add the answer to the page. The widget reads the page each time it loads, so the next visitor gets the new answer.
 
 Step-by-step instructions, every setting, and troubleshooting are in [USAGE.md](USAGE.md).
 
